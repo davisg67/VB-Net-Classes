@@ -1,0 +1,307 @@
+Imports Microsoft.VisualBasic
+Imports System.Data.SqlClient
+Imports System.Data
+Imports System.Globalization
+Imports ErrorHandling
+
+Public Class MunicipalAssignment
+    Private _ID As String = String.Empty
+    Private _PropertyID As String = String.Empty
+    Private _AccountNumber As String = String.Empty
+    Private _MeterID As String = String.Empty
+    Private _Label As String = String.Empty
+    Private _AssignmentID As String = String.Empty
+
+    Public ReadOnly Property ID_Field() As String
+        Get
+            Return _ID
+        End Get
+    End Property
+
+    Public Property PropertyID_Field() As String
+        Get
+            Return _PropertyID
+        End Get
+        Set(value As String)
+            _PropertyID = value
+        End Set
+    End Property
+
+    Public Property AccountNumber_Field() As String
+        Get
+            Return _AccountNumber
+        End Get
+        Set(value As String)
+            _AccountNumber = value
+        End Set
+    End Property
+
+    Public Property MeterID_Field() As String
+        Get
+            Return _MeterID
+        End Get
+        Set(value As String)
+            _MeterID = value
+        End Set
+    End Property
+
+    Public Property Label_Field() As String
+        Get
+            Return _Label
+        End Get
+        Set(value As String)
+            _Label = value
+        End Set
+    End Property
+
+    Public Property AssignmentID_Field() As String
+        Get
+            Return _AssignmentID
+        End Get
+        Set(value As String)
+            _AssignmentID = value
+        End Set
+    End Property
+
+
+    Public Function Init(ID As String) As String
+        If Not IsNumeric(ID) Then
+            ErrorHandler.WritelogFile("BILLING", "MunicipalAssignment(class)", "Init", "The ID value received was not a number.")
+            Return "The ID value received was not a number."
+        End If
+
+        Dim Result As String = String.Empty
+        Dim conString = ConfigurationManager.ConnectionStrings("MSIUBDAPPCodeCon").ConnectionString
+        Dim queryString = "SELECT * FROM municipal_assignments WHERE id = " & ID
+
+        Using connection As New SqlConnection(conString)
+            Try
+                connection.Open()
+            Catch ex As SqlException
+                ErrorHandler.WritelogFile("BILLING", "MunicipalAssignment(Class)", "Init", ex.Message.ToString())
+                Return ex.Message.ToString()
+            End Try
+
+            Using command = New SqlCommand(queryString, connection)
+                Using SQLreader As SqlDataReader = command.ExecuteReader()
+                    Try
+                        If SQLreader.HasRows Then
+                            While (SQLreader.Read())
+                                _ID = SQLreader("id")
+
+                                If IsDBNull(SQLreader("property_id")) Then
+                                    _PropertyID = String.Empty
+                                Else
+                                    _PropertyID = SQLreader("property_id").ToString()
+                                End If
+
+                                If IsDBNull(SQLreader("account_number")) Then
+                                    _AccountNumber = String.Empty
+                                Else
+                                    _AccountNumber = SQLreader("account_number")
+                                End If
+
+                                If IsDBNull(SQLreader("meter_id")) Then
+                                    _MeterID = String.Empty
+                                Else
+                                    _MeterID = SQLreader("meter_id")
+                                End If
+
+                                If IsDBNull(SQLreader("label")) Then
+                                    _Label = String.Empty
+                                Else
+                                    _Label = SQLreader("label")
+                                End If
+
+                                If IsDBNull(SQLreader("assignment_id")) Then
+                                    _AssignmentID = String.Empty
+                                Else
+                                    _AssignmentID = SQLreader("assignment_id")
+                                End If
+
+                            End While
+
+                        End If
+
+                        Return "Success"
+                    Catch ex As SqlException
+                        ErrorHandler.WritelogFile("BILLING", "MunicipalAssignment(Class)", "Init", ex.Message.ToString())
+                        Return ex.Message.ToString()
+                    Catch ex As Exception
+                        ErrorHandler.WritelogFile("BILLING", "MunicipalAssignment(Class)", "Init", ex.Message.ToString())
+                        Return ex.Message.ToString()
+                    End Try
+                End Using
+            End Using
+        End Using
+    End Function
+
+	
+    Public Shared Function GetMunicipalItemName(ItemID As String) As String
+        Dim ItemName As String = String.Empty
+
+        Dim conString = ConfigurationManager.ConnectionStrings("MSIUBDAPPCodeCon").ConnectionString
+        Dim queryString = "Select id, item_name FROM billing_municipal_items WHERE id = " & ItemID
+
+
+        Using connection As New SqlConnection(conString)
+            Try
+                connection.Open()
+            Catch ex As SqlException
+                ErrorHandler.WritelogFile("BILLING", "MunicipalAssignment(Class)", "GetMunicipalItemName()", ex.Message.ToString())
+                Return "Error"
+            End Try
+
+            Using command = New SqlCommand(queryString, connection)
+                Using SQLreader As SqlDataReader = command.ExecuteReader()
+                    Try
+                        If SQLreader.HasRows Then
+                            While (SQLreader.Read())
+                                ItemName = SQLreader("item_name")
+                            End While
+                        End If
+
+                        Return ItemName
+                    Catch ex As SqlException
+                        ErrorHandler.WritelogFile("BILLING", "MunicipalAssignment(Class)", "GetMunicipalItemName()", ex.Message.ToString())
+                        Return "Error"
+                    Catch ex As Exception
+                        ErrorHandler.WritelogFile("BILLING", "MunicipalAssignment(Class)", "GetMunicipalItemName()", ex.Message.ToString())
+                        Return "Error"
+                    End Try
+                End Using
+            End Using
+        End Using
+    End Function
+
+	
+    'returns municipal item's id value, 0 if not found or -1 for error.
+    Public Shared Function GetMunicipalItemID(ItemName As String) As Integer
+        Dim ItemID As Integer = 0
+
+        Dim conString = ConfigurationManager.ConnectionStrings("MSIUBDAPPCodeCon").ConnectionString
+        Dim queryString = "Select id, item_name FROM billing_municipal_items WHERE item_name = '" & ItemName & "'"
+
+
+        Using connection As New SqlConnection(conString)
+            Try
+                connection.Open()
+            Catch ex As SqlException
+                ErrorHandler.WritelogFile("BILLING", "MunicipalAssignment(Class)", "GetMunicipalItemID()", ex.Message.ToString())
+                Return "-1"
+            End Try
+
+            Using command = New SqlCommand(queryString, connection)
+                Using SQLreader As SqlDataReader = command.ExecuteReader()
+                    Try
+                        If SQLreader.HasRows Then
+                            While (SQLreader.Read())
+                                ItemID = SQLreader("id")
+                            End While
+                        End If
+
+                        Return ItemID
+                    Catch ex As SqlException
+                        ErrorHandler.WritelogFile("BILLING", "MunicipalAssignment(Class)", "GetMunicipalItemID()", ex.Message.ToString())
+                        Return "-1"
+                    Catch ex As Exception
+                        ErrorHandler.WritelogFile("BILLING", "MunicipalAssignment(Class)", "GetMunicipalItemID()", ex.Message.ToString())
+                        Return "-1"
+                    End Try
+                End Using
+            End Using
+        End Using
+    End Function
+
+	
+    Public Shared Function AddMunicipalAssignment(ma As MunicipalAssignment) As String
+        Dim Result As String = String.Empty
+
+        Dim constr As String = ConfigurationManager.ConnectionStrings("MSIUBDAPPCodeCon").ConnectionString
+
+        Using con As New SqlConnection(constr)
+            Using cmd As New SqlCommand()
+                cmd.CommandType = CommandType.StoredProcedure
+                cmd.CommandText = "AddMunicipalAssignment"
+
+                'Identifier
+                cmd.Parameters.Add("@PropID", SqlDbType.Int).Value = Integer.Parse(ma.PropertyID_Field())
+
+                If ma.AccountNumber_Field() = String.Empty Then
+                    cmd.Parameters.Add("@Account", SqlDbType.VarChar).Value = DBNull.Value
+                Else
+                    cmd.Parameters.Add("@Account", SqlDbType.VarChar).Value = ma.AccountNumber_Field()
+                End If
+
+                If ma.MeterID_Field() = String.Empty Then
+                    cmd.Parameters.Add("@MeterID", SqlDbType.VarChar).Value = DBNull.Value
+                Else
+                    cmd.Parameters.Add("@MeterID", SqlDbType.VarChar).Value = ma.MeterID_Field()
+                End If
+
+                cmd.Parameters.Add("@Label", SqlDbType.VarChar).Value = ma.Label_Field()
+                cmd.Parameters.Add("@AssignmentID", SqlDbType.Int).Value = Integer.Parse(ma.AssignmentID_Field())
+
+                Try
+                    cmd.Connection = con
+                    con.Open()
+
+                    'Insert record
+                    cmd.ExecuteNonQuery()
+
+                    Return "Success"
+                Catch ex As SqlException
+                    ErrorHandler.WritelogFile("BILLING", "MunicipalAssignment(class)", "AddMunicipalAssignment()", ex.Message.ToString())
+                    Return ex.Message.ToString()
+                Catch ex As Exception
+                    ErrorHandler.WritelogFile("BILLING", "MunicipalAssignment(class)", "AddMunicipalAssignment()", ex.Message.ToString())
+                    Return ex.Message.ToString()
+                End Try
+            End Using
+        End Using
+    End Function
+
+	
+    'Return a list of municipal assignment IDs.
+    Public Shared Function GetMunicipalAssignments(PropID As String) As List(Of String)
+        Dim List As List(Of String) = New List(Of String)
+        Dim queryString As String = String.Empty
+
+        Dim conString = ConfigurationManager.ConnectionStrings("MSIUBDAPPCodeCon").ConnectionString
+        queryString = "SELECT * FROM billing_municipal_assignments Where property_id = " & PropID
+        queryString &= "ORDER BY account_number, meter_id"
+
+
+        Using connection As New SqlConnection(conString)
+            Try
+                connection.Open()
+            Catch ex As SqlException
+                ErrorHandler.WritelogFile("BILLING", "MunicipalAssignment(Class)", "GetMunicipalAssignments()", ex.Message.ToString())
+                Return List
+            End Try
+
+            Using command = New SqlCommand(queryString, connection)
+                Using SQLreader As SqlDataReader = command.ExecuteReader()
+                    Try
+                        If SQLreader.HasRows Then
+                            While (SQLreader.Read())
+                                List.Add(SQLreader("id").ToString())
+                            End While
+                        End If
+
+                        Return List
+                    Catch ex As SqlException
+                        ErrorHandler.WritelogFile("BILLING", "MunicipalAssignment(Class)", "GetMunicipalAssignments()", ex.Message.ToString())
+                        List.Clear()
+                        Return List
+                    Catch ex As Exception
+                        ErrorHandler.WritelogFile("BILLING", "MunicipalAssignment(Class)", "GetMunicipalAssignments()", ex.Message.ToString())
+                        List.Clear()
+                        Return List
+                    End Try
+                End Using
+            End Using
+        End Using
+    End Function
+
+End Class

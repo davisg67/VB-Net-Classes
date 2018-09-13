@@ -1,0 +1,461 @@
+Imports Microsoft.VisualBasic
+Imports ErrorHandling
+Imports System.Data.SqlClient
+Imports System.Data
+Imports System.Net.Mail
+Imports System.Globalization
+
+Public Class CS_Project
+    Inherits System.Web.HttpApplication
+
+    Private _projectID As String = String.Empty
+    Private _userID As String = String.Empty
+    Private _project_name As String = String.Empty
+    Private _start_date As String = String.Empty
+    Private _hours As String = String.Empty
+    Private _requestedBy As String = String.Empty
+    Private _notes As String = String.Empty
+    Private _status As String = String.Empty
+
+    'Constructor
+    Public Sub New()
+
+    End Sub
+
+
+    Public ReadOnly Property ProjectID() As String
+        Get
+            Return _projectID
+        End Get
+    End Property
+
+
+    Public Property UserID() As String
+        Get
+            Return _userID
+        End Get
+        Set(value As String)
+            _userID = value
+        End Set
+    End Property
+
+
+    Public Property ProjectName() As String
+        Get
+            Return _project_name
+        End Get
+        Set(value As String)
+            _project_name = value
+        End Set
+    End Property
+
+
+    Public Property StartDate() As String
+        Get
+            Return _start_date
+        End Get
+        Set(value As String)
+            _start_date = value
+        End Set
+    End Property
+
+    Public Property Hours() As String
+        Get
+            Return _hours
+        End Get
+        Set(value As String)
+            _hours = value
+        End Set
+    End Property
+
+
+    Public Property RequestedBy() As String
+        Get
+            Return _requestedBy
+        End Get
+        Set(value As String)
+            _requestedBy = value
+        End Set
+    End Property
+
+
+    Public Property Notes() As String
+        Get
+            Return _notes
+        End Get
+        Set(value As String)
+            _notes = value
+        End Set
+    End Property
+
+
+    Public Property Status() As String
+        Get
+            Return _status
+        End Get
+        Set(value As String)
+            _status = value
+        End Set
+    End Property
+
+
+    Public Function load(id As String) As String
+        Dim Result As String = String.Empty
+        Dim DateValue As Date
+
+        Try
+            Dim conString = ConfigurationManager.ConnectionStrings("MSIUBDAPPCodeCon").ConnectionString
+            Dim queryString = "Select * FROM csr_special_projects WHERE id = " & id
+
+            Dim connection As New SqlConnection(conString)
+
+
+            Using (connection)
+                Dim command = New SqlCommand(queryString, connection)
+                connection.Open()
+                Dim SQLreader As SqlDataReader = command.ExecuteReader()
+                If SQLreader.HasRows Then
+                    While (SQLreader.Read())
+                        If IsDBNull(SQLreader("id")) Then
+                            _projectID = String.Empty
+                        Else
+                            _projectID = SQLreader("id").ToString
+                        End If
+
+                        If IsDBNull(SQLreader("csr_user_id")) Then
+                            UserID = String.Empty
+                        Else
+                            UserID = SQLreader("csr_user_id").ToString
+                        End If
+
+                        If IsDBNull(SQLreader("project_name")) Then
+                            ProjectName = String.Empty
+                        Else
+                            ProjectName = SQLreader("project_name")
+                        End If
+
+                        If IsDBNull(SQLreader("start_date")) Then
+                            StartDate = String.Empty
+                        Else
+                            DateValue = SQLreader("start_date")
+                            StartDate = DateValue.ToString("MM/dd/yyyy")
+                        End If
+
+                        If IsDBNull(SQLreader("time_hours")) Then
+                            Hours = String.Empty
+                        Else
+                            Hours = SQLreader("time_hours")
+                        End If
+
+                        If IsDBNull(SQLreader("requested_by")) Then
+                            RequestedBy = String.Empty
+                        Else
+                            RequestedBy = SQLreader("requested_by")
+                        End If
+
+                        If IsDBNull(SQLreader("notes")) Then
+                            Notes = String.Empty
+                        Else
+                            Notes = SQLreader("notes")
+                        End If
+
+                        If IsDBNull(SQLreader("status")) Then
+                            Status = String.Empty
+                        Else
+                            Status = SQLreader("status")
+                        End If
+
+                    End While
+                Else
+                    Throw New Exception("Project ID was Not found!")
+                End If
+                
+                connection.Close()
+                Return "Success"
+            End Using
+        Catch ex As SqlException
+            ErrorHandler.WritelogFile("CSR", "CS_Project(class)", "Load", ex.Message.ToString())
+            Return ex.Message.ToString()
+        Catch ex As Exception
+            ErrorHandler.WritelogFile("CSR", "CS_Project(class)", "Load", ex.Message.ToString())
+            Return ex.Message.ToString()
+        End Try
+    End Function
+
+
+    Public Shared Function UpdateSpecialProjects(project As CS_Project) As String
+        Dim Result As String = String.Empty
+        Dim query As String = String.Empty
+
+        query &= "UPDATE csr_special_projects SET time_hours = @time, notes = @text, status = @status "
+        query &= "WHERE id = " & project.ProjectID()
+
+        Dim constr As String = ConfigurationManager.ConnectionStrings("MSIUBDAPPCodeCon").ConnectionString
+        Using con As New SqlConnection(constr)
+            Using cmd As New SqlCommand()
+                cmd.CommandText = query
+                cmd.Parameters.AddWithValue("@time", project.Hours())
+                cmd.Parameters.AddWithValue("@text", project.Notes())
+                cmd.Parameters.AddWithValue("@status", project.Status())
+                cmd.Connection = con
+				
+                Try
+                    con.Open()
+
+                    'Update record
+                    cmd.ExecuteNonQuery()
+
+                    Return "Success"
+                Catch ex As SqlException
+                    ErrorHandler.WritelogFile("CSR", "CS_Project(class)", "UpdateSpecialProject", ex.Message.ToString())
+                    Return ex.Message.ToString()
+                Catch ex As Exception
+                    ErrorHandler.WritelogFile("CSR", "CS_Project(class)", "UpdateSpecialProject", ex.Message.ToString())
+                    Return ex.Message.ToString()
+                End Try
+            End Using
+        End Using
+    End Function
+
+	
+    Public Shared Function AddNewSpecialProject(project As CS_Project) As String
+        Dim Result As String = String.Empty
+
+        Dim constr As String = ConfigurationManager.ConnectionStrings("MSIUBDAPPCodeCon").ConnectionString
+        Using con As New SqlConnection(constr)
+            Try
+                Using cmd As New SqlCommand()
+                    cmd.CommandType = CommandType.StoredProcedure
+                    cmd.CommandText = "AddSpecialProject"
+                    cmd.Parameters.Add("@name", SqlDbType.VarChar).Value = project.ProjectName()
+                    cmd.Parameters.Add("@assigned", SqlDbType.Date).Value = CDate(project.StartDate())
+                    cmd.Parameters.Add("@user", SqlDbType.Int).Value = project.UserID()
+                    cmd.Parameters.Add("@request", SqlDbType.VarChar).Value = project.RequestedBy()
+                    cmd.Parameters.Add("@notes", SqlDbType.VarChar).Value = project.Notes()
+                    cmd.Parameters.Add("@status", SqlDbType.VarChar).Value = project.Status()
+
+
+                    cmd.Connection = con
+                    con.Open()
+
+                    'Insert record
+                    cmd.ExecuteNonQuery()
+
+                    Return "Success"
+                End Using
+            Catch ex As SqlException
+                ErrorHandler.WritelogFile("CSR", "CSR_Project(class)", "AddNewSpecialProject", ex.Message.ToString())
+                Return ex.Message.ToString()
+            Catch ex As Exception
+                ErrorHandler.WritelogFile("CSR", "CSR_Project(class)", "AddNewSpecialProject", ex.Message.ToString())
+                Return ex.Message.ToString()
+            End Try
+        End Using
+    End Function
+
+
+    Public Shared Function SaveNewProjectName(project As String) As String
+        Dim constr As String = ConfigurationManager.ConnectionStrings("MSIUBDAPPCodeCon").ConnectionString
+        Using con As New SqlConnection(constr)
+            Try
+                Using cmd As New SqlCommand()
+                    cmd.CommandType = CommandType.StoredProcedure
+                    cmd.CommandText = "AddCSRProjectName"
+                    cmd.Parameters.Add("@name", SqlDbType.VarChar).Value = project
+                    cmd.Connection = con
+                    con.Open()
+
+                    'Insert record
+                    cmd.ExecuteNonQuery()
+
+                    Return "Success"
+                End Using
+            Catch ex As SqlException
+                ErrorHandler.WritelogFile("CSR", "CS_Project(class)", "SaveNewProject", ex.Message.ToString())
+                Return ex.Message.ToString()
+            Catch ex As Exception
+                ErrorHandler.WritelogFile("CSR", "CS_Project(class)", "SaveNewProject", ex.Message.ToString())
+                Return ex.Message.ToString()
+            End Try
+        End Using
+    End Function
+
+	
+    Public Shared Function SaveProjectNameEdit(ID As String, NewProjectName As String) As String
+        Dim query As String = String.Empty
+
+        query &= "UPDATE csr_special_project_titles SET project_name = @name "
+        query &= "WHERE id = " & ID
+
+
+        Dim constr As String = ConfigurationManager.ConnectionStrings("MSIUBDAPPCodeCon").ConnectionString
+        Using con As New SqlConnection(constr)
+            Using cmd As New SqlCommand()
+                Try
+                    cmd.CommandText = query
+                    cmd.Parameters.AddWithValue("@name", NewProjectName)
+                    cmd.Connection = con
+                    con.Open()
+
+                    'Update record
+                    cmd.ExecuteNonQuery()
+
+                    Return "Success"
+                Catch ex As SqlException
+                    ErrorHandler.WritelogFile("CSR", "CS_Project(class)", "SaveProjectNameEdit", ex.Message.ToString())
+                    Return "A database error has occurred. The database may be temporarily down. The error has been logged."
+                Catch ex As Exception
+                    ErrorHandler.WritelogFile("CSR", "CS_Project(class)", "SaveProjectNameEdit", ex.Message.ToString())
+                    Return "An unexpected error has occurred while attempting to update the database. The error has been logged."
+                End Try
+            End Using
+        End Using
+    End Function
+
+
+    Public Shared Function DeleteProject(ID As String) As String
+        Dim query As String = String.Empty
+        query &= "DELETE FROM csr_special_project_titles WHERE id = " & ID
+
+
+        Dim constr As String = ConfigurationManager.ConnectionStrings("MSIUBDAPPCodeCon").ConnectionString
+        Using con As New SqlConnection(constr)
+            Using cmd As New SqlCommand()
+                cmd.CommandText = query
+                cmd.Connection = con
+                Try
+                    con.Open()
+
+                    'Delete record
+                    cmd.ExecuteNonQuery()
+
+                    Return "Success"
+                Catch ex As SqlException
+                    ErrorHandler.WritelogFile("CSR", "CS_Project(class)", "DeleteProject", ex.Message.ToString())
+                    Return "Error1"
+                Catch ex As Exception
+                    ErrorHandler.WritelogFile("CSR", "CS_Project(class)", "DeleteProject", ex.Message.ToString())
+                    Return "Error2"
+                End Try
+            End Using
+        End Using
+    End Function
+
+
+    'Return the total projects for this user on this day.
+    Public Shared Function GetDailyProjectTotal(DateValue As DateTime, CSR_ID As String) As Integer
+        Dim record_count As Integer = 0
+        Dim strDateValue As String = DateValue.ToString("yyyy-MM-dd")
+
+        Try
+            Dim conString = ConfigurationManager.ConnectionStrings("MSIUBDAPPCodeCon").ConnectionString
+            Dim queryString = "Select id "
+            queryString += "From csr_special_projects "
+            queryString += "Where csr_user_id = " & CSR_ID
+            queryString += " And start_date = '" & strDateValue & "'"
+
+            Dim connection As New SqlConnection(conString)
+
+            Using (connection)
+                Dim command = New SqlCommand(queryString, connection)
+                connection.Open()
+                Dim SQLreader As SqlDataReader = command.ExecuteReader()
+
+                If SQLreader.HasRows Then
+                    While (SQLreader.Read())
+                        record_count = record_count + 1
+                    End While
+                End If
+                SQLreader.Close()
+                connection.Close()
+
+                Return record_count
+            End Using
+        Catch ex As SqlException
+            ErrorHandler.WritelogFile("CSR", "CS_Project(Class)", "GetDailyCallTotal", ex.Message.ToString())
+            Return -1
+        Catch ex As Exception
+            ErrorHandler.WritelogFile("CSR", "CS_Project(Class)", "GetDailyCallTotal", ex.Message.ToString())
+            Return -1
+        End Try
+
+    End Function
+
+	
+    'Return a list array of project IDs for this date and user.
+    Public Shared Function GetProjectIDList(DateValue As DateTime, CSR_ID As String) As ArrayList
+        Dim record_count As Integer = 0
+        Dim strDateValue As String = DateValue.ToString("yyyy-MM-dd")
+        Dim ProjectIDList As ArrayList = New ArrayList()
+
+        Try
+            Dim conString = ConfigurationManager.ConnectionStrings("MSIUBDAPPCodeCon").ConnectionString
+            Dim queryString = "Select id "
+            queryString += "From csr_special_projects "
+            queryString += "Where csr_user_id = " & CSR_ID
+            queryString += " And start_date = '" & strDateValue & "'"
+            queryString += " Order By id"
+
+            Dim connection As New SqlConnection(conString)
+
+            Using (connection)
+                Dim command = New SqlCommand(queryString, connection)
+                connection.Open()
+                Dim SQLreader As SqlDataReader = command.ExecuteReader()
+
+                If SQLreader.HasRows Then
+                    While (SQLreader.Read())
+                        ProjectIDList.Add(SQLreader("id"))
+                    End While
+                End If
+                
+                connection.Close()
+            End Using
+        Catch ex As SqlException
+            ErrorHandler.WritelogFile("CSR", "CS_Project(Class)", "GetProjectIDList", ex.Message.ToString())
+        Catch ex As Exception
+            ErrorHandler.WritelogFile("CSR", "CS_Project(Class)", "GetProjectIDList", ex.Message.ToString())
+        End Try
+
+        Return ProjectIDList
+    End Function
+
+	
+    Public Shared Function GetAssignedCallTypes(Msg_ID As String) As ArrayList
+        Dim CallTypesList As ArrayList = New ArrayList()
+
+        Try
+            Dim conString = ConfigurationManager.ConnectionStrings("MSIUBDAPPCodeCon").ConnectionString
+            Dim queryString = "Select call_type_id FROM csr_assigned_call_type WHERE message_id = " & Msg_ID
+
+            Dim connection As New SqlConnection(conString)
+
+            Using (connection)
+                Dim command = New SqlCommand(queryString, connection)
+                connection.Open()
+                Dim SQLreader As SqlDataReader = command.ExecuteReader()
+                If SQLreader.HasRows Then
+                    While (SQLreader.Read())
+                        CallTypesList.Add(SQLreader("call_type_id"))
+                    End While
+                End If
+                
+                connection.Close()
+                Return CallTypesList
+            End Using
+        Catch ex As SqlException
+            ErrorHandler.WritelogFile("CSR", "CS_Message(class)", "GetAssignedCallTypes", ex.Message.ToString())
+            CallTypesList.Clear()
+            CallTypesList.Add(-1)
+            Return CallTypesList
+        Catch ex As Exception
+            ErrorHandler.WritelogFile("CSR", "CS_Message(class)", "GetAssignedCallTypes", ex.Message.ToString())
+            CallTypesList.Clear()
+            CallTypesList.Add(-1)
+            CallTypesList.Add(ex.Message.ToString())
+            Return CallTypesList
+        End Try
+
+    End Function
+
+End Class

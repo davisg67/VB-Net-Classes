@@ -1,0 +1,229 @@
+Imports Microsoft.VisualBasic
+Imports System.Data.SqlClient
+Imports System.Data
+Imports ErrorHandling
+
+Public Class BillingEmailTemplate
+    Private _TemplateID As String = String.Empty
+    Private _Title As String = String.Empty
+    Private _Text As String = String.Empty
+    Private _CharCount As String = String.Empty
+    Private _CC As String = String.Empty
+    Private _Subject As String = String.Empty
+
+
+    Public ReadOnly Property TemplateID_Field() As String
+        Get
+            Return _TemplateID
+        End Get
+    End Property
+
+    Public Property Title_Field() As String
+        Get
+            Return _Title
+        End Get
+        Set(value As String)
+            _Title = value
+        End Set
+    End Property
+
+    Public Property Text_Field() As String
+        Get
+            Return _Text
+        End Get
+        Set(value As String)
+            _Text = value
+        End Set
+    End Property
+
+    Public Property CharCount_Field() As String
+        Get
+            Return _CharCount
+        End Get
+        Set(value As String)
+            _CharCount = value
+        End Set
+    End Property
+
+    Public Property CC_Field() As String
+        Get
+            Return _CC
+        End Get
+        Set(value As String)
+            _CC = value
+        End Set
+    End Property
+
+    Public Property Subject_Field() As String
+        Get
+            Return _Subject
+        End Get
+        Set(value As String)
+            _Subject = value
+        End Set
+    End Property
+
+    Public Function Init(ID As String) As String
+        If Not IsNumeric(ID) Then
+            Return "The ID value received was not a number."
+        End If
+
+        Try
+            Dim Result As String = String.Empty
+            Dim conString = ConfigurationManager.ConnectionStrings("MSIUBDAPPCodeCon").ConnectionString
+            Dim queryString = "SELECT * FROM billing_email_template WHERE id = " & ID
+
+            Dim connection As New SqlConnection(conString)
+
+            Using (connection)
+                Dim command = New SqlCommand(queryString, connection)
+                connection.Open()
+                Dim SQLreader As SqlDataReader = command.ExecuteReader()
+                If SQLreader.HasRows Then
+                    While (SQLreader.Read())
+                        _TemplateID = SQLreader("id")
+
+                        'Title
+                        If IsDBNull(SQLreader("template_name")) Then
+                            _Title = String.Empty
+                        Else
+                            _Title = SQLreader("template_name")
+                        End If
+
+                        If IsDBNull(SQLreader("template_text")) Then
+                            _Text = String.Empty
+                        Else
+                            _Text = SQLreader("template_text")
+                        End If
+
+                        If IsDBNull(SQLreader("text_count")) Then
+                            _CharCount = String.Empty
+                        Else
+                            _CharCount = SQLreader("text_count")
+                        End If
+
+                        If IsDBNull(SQLreader("cc_address")) Then
+                            _CC = String.Empty
+                        Else
+                            _CC = SQLreader("cc_address")
+                        End If
+
+                        If IsDBNull(SQLreader("subject")) Then
+                            _Subject = String.Empty
+                        Else
+                            _Subject = SQLreader("subject")
+                        End If
+                    End While
+                Else
+                    Throw New Exception("Template ID was Not found!")
+                End If
+                
+                connection.Close()
+                Return "Success"
+            End Using
+        Catch ex As SqlException
+            ErrorHandler.WritelogFile("BILLING", "BillingEmailTemplate(Class)", "Init", ex.Message.ToString())
+            Return ex.Message.ToString()
+        Catch ex As Exception
+            ErrorHandler.WritelogFile("BILLING", "BillingEmailTemplate(Class)", "Init", ex.Message.ToString())
+            Return ex.Message.ToString()
+        End Try
+    End Function
+
+	
+    Public Shared Function AddEmailTemplate(Template As BillingEmailTemplate) As String
+        Dim Result As String = String.Empty
+        Dim constr As String = ConfigurationManager.ConnectionStrings("MSIUBDAPPCodeCon").ConnectionString
+
+        Using con As New SqlConnection(constr)
+            Using cmd As New SqlCommand()
+                Try
+                    cmd.CommandType = CommandType.StoredProcedure
+                    cmd.CommandText = "AddBillingEmailTemplate"
+
+                    cmd.Parameters.Add("@Name", SqlDbType.VarChar).Value = Template.Title_Field()
+                    cmd.Parameters.Add("@Text", SqlDbType.VarChar).Value = Template.Text_Field()
+                    cmd.Parameters.Add("@Count", SqlDbType.Int).Value = Integer.Parse(Template.CharCount_Field())
+                    cmd.Parameters.Add("@CC", SqlDbType.VarChar).Value = Template.CC_Field()
+                    cmd.Parameters.Add("@Subj", SqlDbType.VarChar).Value = Template.Subject_Field()
+
+                    cmd.Connection = con
+                    con.Open()
+
+                    'Insert record
+                    cmd.ExecuteNonQuery()
+
+                    Return "Success"
+                Catch ex As SqlException
+                    ErrorHandler.WritelogFile("BILLING", "BillingEmailTemplate(class)", "AddEmailTemplate()", ex.Message.ToString())
+                    Return ex.Message.ToString()
+                Catch ex As Exception
+                    ErrorHandler.WritelogFile("BILLING", "BillingEmailTemplate(class)", "AddEmailTemplate()", ex.Message.ToString())
+                    Return ex.Message.ToString()
+                End Try
+            End Using
+        End Using
+    End Function
+
+	
+    Public Shared Function UpdateEmailTemplate(Template As BillingEmailTemplate, ID As String) As String
+        Dim query As String = String.Empty
+        query = "UPDATE billing_email_template SET "
+        query &= "template_name = @Name, "
+        query &= "template_text = @Text, "
+        query &= "text_count = @Count, "
+        query &= "cc_address = @CC, "
+        query &= "subject = @Subj "
+        query &= "WHERE id = " & ID
+
+        Dim constr As String = ConfigurationManager.ConnectionStrings("MSIUBDAPPCodeCon").ConnectionString
+        Using con As New SqlConnection(constr)
+            Using cmd As New SqlCommand()
+                cmd.CommandText = query
+                cmd.Parameters.Add("@Name", SqlDbType.VarChar).Value = Template.Title_Field()
+                cmd.Parameters.Add("@Text", SqlDbType.VarChar).Value = Template.Text_Field()
+                cmd.Parameters.Add("@Count", SqlDbType.Int).Value = Integer.Parse(Template.CharCount_Field())
+                cmd.Parameters.Add("@CC", SqlDbType.VarChar).Value = Template.CC_Field()
+                cmd.Parameters.Add("@Subj", SqlDbType.VarChar).Value = Template.Subject_Field()
+                cmd.Connection = con
+                Try
+                    con.Open()
+
+                    'Update record
+                    cmd.ExecuteNonQuery()
+
+                    Return "Success"
+                Catch ex As SqlException
+                    ErrorHandler.WritelogFile("BILLING", "BillingEmailTemplate(class)", "UpdateEmailTemplate()", ex.Message.ToString())
+                    Return ex.Message.ToString()
+                Catch ex As Exception
+                    ErrorHandler.WritelogFile("BILLING", "BillingEmailTemplate(class)", "UpdateEmailTemplate()", ex.Message.ToString())
+                    Return ex.Message.ToString()
+                End Try
+            End Using
+        End Using
+    End Function
+
+	
+    Public Shared Function FormatTemplateText(strBuf As String) As String
+        If strBuf.Length = 0 Then
+            Return String.Empty
+        End If
+
+        Dim FormattedString As String = String.Empty
+
+        FormattedString = strBuf.Replace("%09", "") 'Remove Tabs
+        FormattedString = FormattedString.Replace("%0D%0A", "~") 'Remove Line Breaks
+
+        Dim sentences As String() = FormattedString.Split("~")
+        Dim sentence As String
+		
+        FormattedString = String.Empty
+        For Each sentence In sentences
+            FormattedString &= sentence & vbCrLf
+        Next
+
+        Return FormattedString
+    End Function
+
+End Class

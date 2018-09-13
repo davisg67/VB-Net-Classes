@@ -1,0 +1,638 @@
+Imports ErrorHandling
+Imports Microsoft.VisualBasic
+Imports System.Xml
+Imports ClosedXML.Excel
+Imports System.IO
+Imports System.Net.Mail
+
+Public Class Helper
+    Inherits System.Web.HttpApplication
+
+    
+    'http://codedisplay.com/how-to-download-a-file-from-server-using-asp-net-c-vb-net/
+    'See XMLDisplay.aspx.vb for example code.
+    Public Shared Sub Download(strFileName As String, strPath As String)
+        HttpContext.Current.Response.ContentType = "APPLICATION/OCTET-STREAM"
+        Dim Header As [String] = "Attachment; Filename=" & strFileName
+        HttpContext.Current.Response.AppendHeader("Content-Disposition", Header)
+        Dim Dfile As New System.IO.FileInfo(strPath)
+        HttpContext.Current.Response.WriteFile(Dfile.FullName)
+        HttpContext.Current.Response.[End]()
+    End Sub
+
+    Public Shared Function RemoveWhitespace(fullString As String) As String
+        Return New String(fullString.Where(Function(x) Not Char.IsWhiteSpace(x)).ToArray())
+    End Function
+
+
+    'Takes a string date and returns in standard SQL date format.
+    Public Shared Function SQlDateString(strDate As String) As String
+        If Not IsDate(strDate) Then
+            Return "Error"
+        End If
+
+        Dim d As Date
+        Dim Result As String = String.Empty
+
+        d = CDate(strDate)
+        Result = d.ToString("yyyy-MM-dd")
+        Return Result
+    End Function
+
+	
+    'Takes a datatable based on a session variable and copies to a new datatable.
+    'This preserves the original session variable from changes to the datatable
+    Public Shared Function CopySessionToDataTable(dt As DataTable) As DataTable
+        Dim dt_copy As DataTable = New DataTable()
+        dt_copy = dt.Copy()
+        Return dt_copy
+    End Function
+
+
+    'If a file exists assigns a number in (). For example, a file named ExportedData.xml that already
+    'exists would return ExportedData(1).xml. If the file does not exist then  this function will return 0.
+    Public Shared Function IncrementDuplicateFilePath(strFilePath As String) As String
+        Dim i As Integer
+        Dim Ext As String = String.Empty
+        Dim Path As String = String.Empty
+        Dim modifier As Integer = 1
+
+        'Loop until new file path does not exist. For ex. ExportedDate.xml, ExportedDate(1).xml, ExportedDate(2).xml
+        'Skip if this file does not already exist. 
+        While File.Exists(strFilePath)
+            i = strFilePath.IndexOf(".")
+            Ext = strFilePath.Substring(i) 'Get the file extension.
+            Path = Left(strFilePath, i)
+            strFilePath = Path & "(" & modifier.ToString() & ")" & Ext
+            modifier = modifier + 1
+        End While
+
+        Return strFilePath
+    End Function
+
+    Public Shared Function GridToDT(GV As GridView) As DataTable
+        Dim dt As New DataTable
+        Dim ColInd As Integer = 0
+
+        For Each col As DataControlField In GV.Columns
+            dt.Columns.Add(col.HeaderText)
+        Next
+
+        For Each row As GridViewRow In GV.Rows
+            Dim NewDataRow As DataRow = dt.NewRow
+
+            ColInd = 0
+            For Each col As DataControlField In GV.Columns
+                NewDataRow(ColInd) = row.Cells(ColInd).Text.Replace("&nbsp;", "")
+                ColInd += 1
+            Next
+
+            dt.Rows.Add(NewDataRow)
+        Next
+
+        Return dt
+    End Function
+
+
+
+    'Receives Response object, a formed datatable and string Filename. FileName must include 
+    'extension .xlsx Or xls
+    Public Shared Sub Export_DT_To_Excel(Response As Object, dt As DataTable, FileName As String)
+
+        'WORKING EXPORT TO EXCEL - No row shading
+        Using wb As New XLWorkbook()
+            wb.Worksheets.Add(dt, "Export Data")
+
+            Response.Clear()
+            Response.Buffer = True
+            Response.Charset = ""
+            Response.ContentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            Response.AddHeader("content-disposition", "attachment;filename=" & FileName)
+            Using MyMemoryStream As New MemoryStream()
+                wb.SaveAs(MyMemoryStream)
+                MyMemoryStream.WriteTo(Response.OutputStream)
+                Response.Flush()
+                Response.End()
+            End Using
+        End Using
+    End Sub
+
+
+    'Escapes single quotes in a string like an address.
+    Public Shared Function convertQuotes(ByVal str As String) As String
+        Return str.Replace("'", "''")
+    End Function
+
+	'StackOverflow Solution
+    Public Shared Function FormatXml(XmlNode As XmlNode) As String
+        Dim bob As StringBuilder = New StringBuilder()
+
+        'Use stringWriter to push the formated xml into our StringBuilder bob.
+        Dim stringWriter As StringWriter = New StringWriter(bob)
+
+        'Use the Formatting of xmlTextWriter to provide indentation.
+        Dim xmlTextWriter As XmlTextWriter = New XmlTextWriter(stringWriter)
+
+        xmlTextWriter.Formatting = Formatting.Indented
+        XmlNode.WriteTo(xmlTextWriter)
+        Return bob.ToString()
+    End Function
+
+	
+    'Receives a List of String and looks for duplicates values. If found duplicates are stored in the second List and
+    'a return value of True or False is returned.
+    Public Shared Function FindListDuplicates(List As List(Of String), ByRef DuplicatesList As List(Of String)) As Boolean
+        'http://stackoverflow.com/questions/10835702/how-to-get-duplicate-items-from-a-list-in-vb-net
+        DuplicatesList = List.GroupBy(Function(x) x).Where(Function(x) x.Count() > 1).[Select](Function(x) x.Key).ToList
+        If DuplicatesList.Count > 0 Then
+            Return True
+        Else
+            Return False
+        End If
+    End Function
+
+
+    Public Shared Function convertToXLSX(filePath As String) As String
+        Dim ef As ExcelFile = ExcelFile.Load(filePath)
+        Dim newfilePath As String = Path.ChangeExtension(filePath, ".xlsx")
+        ef.Save(newfilePath)
+
+        Return newfilePath
+    End Function
+
+	
+    Public Shared Function StringExistsInArray(list As ArrayList, value As String) As Integer
+        For count As Integer = 0 To list.Count - 1
+            If list(count) = value Then
+                Return count
+                Exit For
+            End If
+        Next
+        Return -1
+    End Function
+	
+
+    'Return the column index if found or -1 if not.
+    Public Shared Function FindColumnByName(dt As DataTable, Value As String) As Integer
+        For loopCount As Integer = 0 To dt.Columns.Count - 1
+            If dt.Columns(loopCount).ColumnName = Value Then
+                Return loopCount
+                Exit For
+            End If
+        Next
+        Return -1
+    End Function
+
+
+    Public Shared Function ValidateEmail(email As String) As String
+        Try
+            Dim testAddress = New MailAddress(email)
+        Catch ex As FormatException
+            Return "Fail"
+        End Try
+
+        Return "Success"
+    End Function
+
+	
+    Public Shared Function CurrentDateOnly(Optional DateString As String = "M-d-yyyy") As String
+        Dim CurrentDate As String = Today().ToString(DateString)
+        Return CurrentDate
+    End Function
+
+	
+    Public Shared Function SendMailMessage(MsgTo As String, Subject As String, Body As String) As String
+        Try
+		    Dim CompanyEmailServer As String = ""
+            Dim myMessage As MailMessage = New MailMessage()
+
+            myMessage.Subject = Subject
+            myMessage.Body = Body
+            myMessage.From = New MailAddress(CompanyEmailServer, "MSUI Management System")
+            myMessage.To.Add(New MailAddress(MsgTo, MsgTo))
+
+            'Testing
+            'myMessage.To.Add(New MailAddress("user@msiubd.com", "Test Account"))
+
+            Dim mySmtpClient As SmtpClient = New SmtpClient()
+            mySmtpClient.Send(myMessage)
+            Return "Success"
+        Catch ex As SmtpException
+            ErrorHandler.WritelogFile("Helper", "Helper(class)", "SendMailMessage", ex.Message.ToString())
+            Return "An SMTP error occurred while attempting to send an e-mail. Mail server may be down."
+        Catch ex As Exception
+            ErrorHandler.WritelogFile("Helper", "Helper(class)", "SendMailMessage", ex.Message.ToString())
+            Return "An unexpected error has occurred while attempting to send the e-mail message. The error has been logged."
+        End Try
+    End Function
+
+
+    Public Shared Function ElapsedTimeInMinutes(StartTime As DateTime, EndTime As DateTime) As String
+        Dim minutesLapsed As Single
+
+        minutesLapsed = (EndTime - StartTime).TotalMinutes
+        Return Math.Round(minutesLapsed, 2, MidpointRounding.AwayFromZero).ToString()
+    End Function
+
+
+    'Received the current date and returns an list of datetime values for that week.
+    'A week runs from Sunday to Saturday.
+    Public Shared Function GetDatesOfTheWeek(current_date As DateTime) As List(Of DateTime)
+        Dim DatesOfTheWeek As New List(Of DateTime)()
+
+        Dim Mon As DateTime
+        Dim Tues As DateTime
+        Dim Wed As DateTime
+        Dim Thur As DateTime
+        Dim Fri As DateTime
+        Dim Sat As DateTime
+        Dim Sun As DateTime
+
+
+        Select Case current_date.ToString("dddd") 'Day of the week when started.
+            Case "Sunday"
+                'Sun = current_date.ToString("d") 'short date
+                Sun = current_date
+                Mon = current_date.AddDays(1)
+                Tues = current_date.AddDays(2)
+                Wed = current_date.AddDays(3)
+                Thur = current_date.AddDays(4)
+                Fri = current_date.AddDays(5)
+                Sat = current_date.AddDays(6)
+            Case "Monday"
+                Sun = current_date.AddDays(-1)
+                Mon = current_date
+                Tues = current_date.AddDays(1)
+                Wed = current_date.AddDays(2)
+                Thur = current_date.AddDays(3)
+                Fri = current_date.AddDays(4)
+                Sat = current_date.AddDays(5)
+            Case "Tuesday"
+                Sun = current_date.AddDays(-2)
+                Mon = current_date.AddDays(-1)
+                Tues = current_date
+                Wed = current_date.AddDays(1)
+                Thur = current_date.AddDays(2)
+                Fri = current_date.AddDays(3)
+                Sat = current_date.AddDays(4)
+            Case "Wednesday"
+                Sun = current_date.AddDays(-3)
+                Mon = current_date.AddDays(-2)
+                Tues = current_date.AddDays(-1)
+                Wed = current_date
+                Thur = current_date.AddDays(1)
+                Fri = current_date.AddDays(2)
+                Sat = current_date.AddDays(3)
+            Case "Thursday"
+                Sun = current_date.AddDays(-4)
+                Mon = current_date.AddDays(-3)
+                Tues = current_date.AddDays(-2)
+                Wed = current_date.AddDays(-1)
+                Thur = current_date
+                Fri = current_date.AddDays(1)
+                Sat = current_date.AddDays(2)
+            Case "Friday"
+                Sun = current_date.AddDays(-5)
+                Mon = current_date.AddDays(-4)
+                Tues = current_date.AddDays(-3)
+                Wed = current_date.AddDays(-2)
+                Thur = current_date.AddDays(-1)
+                Fri = current_date
+                Sat = current_date.AddDays(1)
+            Case Else
+                Sun = current_date.AddDays(-6)
+                Mon = current_date.AddDays(-5)
+                Tues = current_date.AddDays(-4)
+                Wed = current_date.AddDays(-3)
+                Thur = current_date.AddDays(-2)
+                Fri = current_date.AddDays(-1)
+                Sat = current_date
+        End Select
+
+        DatesOfTheWeek.Add(Sun)
+        DatesOfTheWeek.Add(Mon)
+        DatesOfTheWeek.Add(Tues)
+        DatesOfTheWeek.Add(Wed)
+        DatesOfTheWeek.Add(Thur)
+        DatesOfTheWeek.Add(Fri)
+        DatesOfTheWeek.Add(Sat)
+
+        Return DatesOfTheWeek
+    End Function
+
+	
+    ' https://thechriskent.com/2012/05/01/prettify-your-xml-in-net/
+    Public Shared Function PrettyXML(XMLString As String) As String
+        Dim sw As New StringWriter()
+        Dim xw As New XmlTextWriter(sw)
+        xw.Formatting = Formatting.Indented
+        xw.Indentation = 4
+        Dim doc As New XmlDocument
+        doc.LoadXml(XMLString)
+        doc.Save(xw)
+        Return sw.ToString()
+    End Function
+
+	
+    Public Shared Function DeleteRecordsByID(query As String) As String
+        'query = "DELETE FROM " & Table & " WHERE property_id = " & ID
+
+        Dim constr As String = ConfigurationManager.ConnectionStrings("MSIUBDAPPCodeCon").ConnectionString
+        Using con As New SqlConnection(constr)
+            Using cmd As New SqlCommand()
+                cmd.CommandText = query
+
+                cmd.Connection = con
+                Try
+                    con.Open()
+
+                    'Delete records
+                    cmd.ExecuteNonQuery()
+
+                    con.Close()
+                    con.Dispose()
+                    Return "Success"
+
+                Catch ex As SqlException
+                    Return "Error: Delete operation canceled. " & ex.Message.ToString()
+                Catch ex As Exception
+                    Return "Error: Delete operation canceled. " & ex.Message.ToString()
+                End Try
+            End Using
+        End Using
+    End Function
+
+	
+    
+
+
+    'Takes the recurring monthly day and adjusts if reqired for weekends and holidays.
+    'Public Shared Function ConvertDayToBusinessDayDate(Day As Integer, CurrentMonth As Integer, CurrentYear As Integer, Optional ByVal TestDate As DateTime = Nothing) As DateTime
+    Public Shared Function ConvertToBusinessDayDate(DateValue As Date) As String
+        Dim IsHoliday As Integer = 0
+        Dim DayValue As Integer = Day(DateValue)
+        Dim CurrentMonth As Integer = Month(DateValue)
+        Dim CurrentYear As Integer = Year(DateValue)
+
+        'Dim CurrentDate As Date
+
+
+
+        'CREATE A DATE FOR THE RECURRING DAY OF THE CURRENT MONTH AND YEAR
+        'Dim strBuf As String = CurrentMonth.ToString() & "/" & DayValue.ToString() & "/" & CurrentYear.ToString()
+        Dim strBuf As String = DateValue.ToString("MM/dd/yyyy")
+        Dim CurrentDate As Date = CDate(strBuf)
+
+        'Check if hte recurring day falls on a month with less days.
+        'If Day > DaysInMonth Then
+        '    'Loop and advance days until date is moved into the next month.
+        '    While Day > DaysInMonth
+        '        CurrentDate = CurrentDate.AddDays(1)
+        '        CurrentMonth = Month(CurrentDate)
+        '        CurrentYear = Year(CurrentDate)
+        '        DaysInMonth = System.DateTime.DaysInMonth(CurrentYear, CurrentMonth)
+        '    End While
+        'End If
+
+        Dim DayOfTheWeek As Integer = Weekday(CurrentDate) '1 = Sunday - 7 = saturday
+
+        '*** HOLIDAYS ***
+
+        'New Year's Day
+        If DayValue = 1 And CurrentMonth = 1 Then
+            IsHoliday = 1
+        End If
+
+        'Memorial Day - Falls on Monday 24 - 31 of May
+        If DayOfTheWeek = 2 And CurrentMonth = 5 Then
+            If DayValue > 23 And DayValue <= 31 Then
+                IsHoliday = 2
+            End If
+        End If
+
+        'Independance Day
+        If DayValue = 4 And CurrentMonth = 7 Then
+            IsHoliday = 3
+        End If
+
+        'Labor Day - Falls on Monday 1 - 7 of Sept.
+        If DayOfTheWeek = 2 And CurrentMonth = 9 Then
+            If DayValue > 0 And DayValue < 8 Then
+                IsHoliday = 4
+            End If
+        End If
+
+        'Thanksgiving - Falls on Thursday 22 - 28 of Novemebr
+        If DayOfTheWeek = 5 And CurrentMonth = 11 Then
+            If DayValue > 21 And DayValue < 29 Then
+                IsHoliday = 5
+            End If
+        End If
+
+        'Christmas
+        If DayOfTheWeek = 25 And CurrentMonth = 12 Then
+            IsHoliday = 6
+        End If
+
+        If IsHoliday > 0 Then
+            CurrentDate = CurrentDate.AddDays(1)
+        End If
+
+        DayOfTheWeek = Weekday(CurrentDate)
+        If DayOfTheWeek = 1 Or DayOfTheWeek = 7 Then
+            If DayOfTheWeek = 1 Then
+                CurrentDate = CurrentDate.AddDays(1) 'Adjust for Sunday
+            Else
+                CurrentDate = CurrentDate.AddDays(2) ' Adjust for Sat and Sun
+            End If
+        End If
+
+        Return CurrentDate.ToString()
+    End Function
+
+	
+    'Take phone number entered in textbox and format to US phone number. 999-999-9999
+    'Larger numbers are considered non-US and are returned as numeric string only.
+    Public Shared Function FormatToUSPhone(strPhoneValue As String) As String
+        Dim FormattedString As String = String.Empty
+
+        Dim nonNumericCharacters As New System.Text.RegularExpressions.Regex("\D")
+        Dim numericOnlyString As String = nonNumericCharacters.Replace(strPhoneValue, String.Empty)
+
+        If numericOnlyString.Length > 10 Then
+            Return numericOnlyString
+        ElseIf numericOnlyString.Length = 10 Then
+            'Area code prefix
+            FormattedString = numericOnlyString.Insert(3, "-")
+            FormattedString = FormattedString.Insert(7, "-")
+            Return FormattedString
+        ElseIf numericOnlyString.Length = 7 Then
+            'Simple phone number
+            FormattedString = numericOnlyString.Insert(3, "-")
+            Return FormattedString
+        Else
+            Return "Invalid Entry!"
+        End If
+    End Function
+
+	
+    'Returns the index of the array with the largest value.
+    Public Shared Function MaxValOfIntArrayList(ByRef List As ArrayList) As Integer
+        Dim i As Integer
+        Dim MaxIntegersIndex As Integer
+        MaxIntegersIndex = 0
+
+        For i = 0 To List.Count - 1
+            If List(i) > List(MaxIntegersIndex) Then
+                MaxIntegersIndex = i
+            End If
+        Next
+
+        Return MaxIntegersIndex
+    End Function
+
+	
+    Public Shared Function GetMonthName(MonthValue As Integer) As String
+        Dim strMonth As String = String.Empty
+        Select Case MonthValue
+            Case 1
+                strMonth = "January"
+            Case 2
+                strMonth = "February"
+            Case 3
+                strMonth = "March"
+            Case 4
+                strMonth = "April"
+            Case 5
+                strMonth = "May"
+            Case 6
+                strMonth = "June"
+            Case 7
+                strMonth = "July"
+            Case 8
+                strMonth = "August"
+            Case 9
+                strMonth = "September"
+            Case 10
+                strMonth = "October"
+            Case 11
+                strMonth = "November"
+            Case 12
+                strMonth = "December"
+            Case Else
+                strMonth = "Error"
+        End Select
+
+        Return strMonth
+    End Function
+
+   
+
+    'Returns total number of days including start and end dates.
+    Public Shared Function ReturnNumberOfDays(StartDate As String, EndDate As String) As Integer
+        Dim DayCount As Integer
+        Dim dt1 As DateTime = Convert.ToDateTime(StartDate)
+        Dim dt2 As DateTime = Convert.ToDateTime(EndDate)
+
+        Dim ts As TimeSpan = dt2.Subtract(dt1)
+
+        If Convert.ToInt32(ts.Days) >= 0 Then
+            DayCount = (Convert.ToInt32(ts.Days) + 1) ' Include the end date.
+            Return DayCount
+        Else
+            Return -1
+        End If
+    End Function
+
+
+    Public Shared Function ValidateImageFileType(ByVal file As HttpPostedFile) As String
+        Dim validFileTypes As String() = {"bmp", "gif", "png", "jpg", "jpeg"}
+        Dim ext As String = System.IO.Path.GetExtension(file.FileName)
+        Dim isValidFile As Boolean = False
+
+        For i As Integer = 0 To validFileTypes.Length - 1
+            If ext = "." & validFileTypes(i) Then
+                isValidFile = True
+                Exit For
+            End If
+        Next
+
+        If Not isValidFile Then
+            Return "Invalid File. Please upload a File with extension " & String.Join(",", validFileTypes)
+        Else
+            Return "Success"
+        End If
+    End Function
+
+
+    Public Shared Function UppercaseFirstLetter(ByVal val As String) As String
+        ' Test for nothing or empty.
+        If String.IsNullOrEmpty(val) Then
+            Return val
+        End If
+
+        ' Convert to character array.
+        Dim array() As Char = val.ToCharArray
+
+        ' Uppercase first character.
+        array(0) = Char.ToUpper(array(0))
+
+        ' Return new string.
+        Return New String(array)
+    End Function
+
+	
+    'Receive a Start and Ending date - Return list of all dates between including the start and end dates.
+    Public Shared Function GetDatesBetween(d1 As Date, d2 As Date) As List(Of Date)
+        Dim DateList As List(Of Date) = New List(Of Date)
+
+        Do While (d1 <= d2)
+            DateList.Add(d1)
+            d1 = d1.AddDays(1)
+        Loop
+
+        Return DateList
+    End Function
+
+	
+    'Receive two dates and return the number of days as integer.
+    Public Shared Function GetDateDiff_Days(d1 As Date, d2 As Date) As Integer
+        Dim ts As TimeSpan
+        Dim Days As Integer
+
+        If d1 = d2 Then
+            Return 0
+        Else
+            If d2 > d1 Then
+                ts = d2.Subtract(d1)
+            Else
+                ts = d1.Subtract(d2)
+            End If
+
+            Days = Convert.ToInt32(ts.Days)
+            Return Days
+        End If
+    End Function
+
+	
+    Public Shared Function DBConnectionStatus(ConString As String) As Boolean
+        '"MSIUBDAPPCodeCon"
+
+        Try
+            Dim constr As String = ConfigurationManager.ConnectionStrings(ConString).ConnectionString
+            Using con As New SqlConnection(constr)
+                con.Open()
+                Return (con.State = ConnectionState.Open)
+            End Using
+        Catch ex As SqlException
+            ErrorHandler.WritelogFile("Helper", "Helper(class)", "DBConnectionStatus()", ex.Message.ToString())
+            Return False
+        Catch ex As Exception
+            ErrorHandler.WritelogFile("Helper", "Helper(class)", "DBConnectionStatus()", ex.Message.ToString())
+            Return False
+        End Try
+    End Function
+
+	
+    
+End Class
